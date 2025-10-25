@@ -1,0 +1,1722 @@
+Sara Séguin, ing., Ph.D.
+Professeure au département d’informatique et de mathématique
+sara.seguin@uqac.ca
+8INF342
+Systèmes d’exploitation
+Séance 7 – Synchronisation 2
+
+8INF342 - SARA SÉGUIN 2
+CONTENU
+ Principe de base
+ Situation de course
+ Interactions entre processus
+ Exclusion mutuelle 
+ Matérielle
+ Logicielle
+ Algorithme de Peterson
+ Mécanismes de synchronisation
+ Sémaphores
+ Problèmes classiques de synchronisation
+ C++/Linux
+ Messages/Tuyaux/Signaux
+
+8INF342 - SARA SÉGUIN 3
+STATISTIQUES, 3 OCTOBRE
+Vidéo explicative, cours du 23 septembre en virtuel.
+
+8INF342 - SARA SÉGUIN 4
+PRINCIPE DE BASE
+
+8INF342 - SARA SÉGUIN 5
+SYNCHRONISATION
+ Tel que vu lors de l’exemple de synchronisation à la fin de la dernière séance.
+Les threads ne sont pas 
+nécessairement exécutés 
+dans « l’ordre » écrit du 
+programme.
+
+8INF342 - SARA SÉGUIN 6
+SYNCHRONISATION
+Pourquoi? 
+Car le CPU alloue les ressources. Les politiques d’ordonnancement du système 
+d’exploitation (et des librairies de thread!), la gestion des interruptions, les autres 
+activités du CPU vont influencer le choix des threads (et des processus!) à exécuter.
+Le CPU (et librairies de thread) fait des choix afin d’allouer les ressources de façons 
+optimale.
+Or, cela peut poser problème:
+ Si un thread veut accéder à une E/S, le CPU pourrait bloquer l’accès à cette E/S 
+pour tous les autres threads et cela peut mener à une condition d’interblocage
+(séance 7).
+ Si 2 threads utilisent la même variable et qu’ils font une lecture/écriture sur cette 
+variable, l’ordre dans lequel les threads vont accéder à la variable est primordiale.
+La synchronisation permet de garantir l’accès à une ressource de façon exclusive.
+
+SYNCHRONISATION
+Exemple
+Char x_in; //Variable globale caractère d’entrée
+Char x_out; //Variable globale caractère de sortie
+//Cette fonction reçoit un caractère du clavier en entrée, puis l’affiche à l’écran.
+void ecrireCaractere()
+{
+x_in = getchar(); //Instruction 1
+x_out = x_in; //Insturction 2
+putchar(x_out); //Instruction 3
+}
+Un CPU, toutes les applications utilisent le même clavier et le même écran.
+Il y a une seule fonction en mémoire, mais plusieurs threads s’en servent.
+8INF342 - SARA SÉGUIN 7
+
+SYNCHRONISATION
+8INF342 - SARA SÉGUIN 8
+Le code suivant simule la 
+situation présentée à la slide 
+précédente.
+Afin de faciliter la 
+démonstration, j’ai simulé 
+l’entrée au clavier par un 
+paramètre qui est passé au 
+thread (par n1 et n2).
+Quel devrait être l’affichage de 
+ce programme?
+
+SYNCHRONISATION
+8INF342 - SARA SÉGUIN 9
+Suite à l’exécution, j’obtiens:
+Pourtant, cela devrait donner 2 suivi de 4 ou alors 4 suivi de 2.
+
+SYNCHRONISATION
+8INF342 - SARA SÉGUIN 10
+Explication
+ 2 suivi de 4 ou 4 suivi de 2: OK, c’est l’affichage désiré.
+ 2 suivi de 2 ou 4 suivi de 4….voici une situation possible:
+t1 invoque output() et est interrompu 
+suite à str_out = n;
+t2 invoque output() et roule la fonction au 
+complet, affichant 4;
+t1 poursuit son exécution. Même si 2 a 
+été passé à la fonction, str_out a été 
+écrasé par la valeur 4 par le thread 2, 
+donc c’est ce qui est affiché.
+
+NÉCESSITÉ DE LA 
+SYNCHRONISATION
+Variables globales. Deux threads modifient la valeur de la variable globale. 
+L’ordre dans lequel s’effectue les opérations est primordial.
+Utilisation des E/S. Deux threads utilisent la même imprimante. Même si 
+l’imprimante est utilisée par un thread, on ne veut pas empêcher un autre 
+thread d’y accéder.
+Le SE ne connaît pas la vitesse d’exécution des threads à priori, il faut les 
+synchroniser. Ne pas oublier: un seul thread à la fois (si 1 CPU).
+8INF342 - SARA SÉGUIN 11
+
+SYNCHRONISATION
+Une solution simple consiste à empêcher un autre thread d’exécuter la 
+fonction si un autre thread l’utilise. On « protège » donc la variable.
+Même exemple que précédent, seule différence: Thread t2 est bloqué tant que 
+thread t1 n’est pas terminé. Cela peut cependant poser problème…à suivre 
+dans la présentation.
+8INF342 - SARA SÉGUIN 12
+
+INSTRUCTIONS 
+ATOMIQUES EN LINUX
+8INF342 - SARA SÉGUIN 13
+• Linux fournit un ensemble d’opérations atomiques.
+• Permettent d’éviter les situations de course.
+• Rappel. Instruction atomique: exécutée sans interruption ni interférence.
+a = a +2 -> Pas nécessairement complété pendant le cycle 
+d’instruction 
+Mais avec atomic_add, sans interruption.
+
+8INF342 - SARA SÉGUIN 14
+SITUATION DE COURSE
+
+SITUATION DE 
+COURSE
+L’exemple que je viens de présenter montre une « situation de course ».
+Des processus peuvent être en compétition ou en concurrence (race condition).
+Supposons deux threads, A et B, et b = 10 et c=20.
+8INF342 - SARA SÉGUIN 15
+Thread B:
+while(true)
+{
+c+=b;
+}
+Thread A:
+while (true)
+{
+b+=c;
+}
+int b=10;
+int c=20;
+int main(){
+par(Thread A, Thread B);
+std::cout << b+c << std::endl;
+}
+Quels sont les 
+affichages 
+possibles?
+
+SITUATION DE 
+COURSE
+J’ai lancé le code 1000 fois en utilisant un script bash:
+for i in {1..500}
+do
+./s5.exe
+done
+8INF342 - SARA SÉGUIN 16
+#include <pthread.h> 
+#include <stdio.h> 
+#include <stdlib.h> 
+#include <iostream>
+#include <thread>
+int b=10;
+int c=20;
+void tA()
+{
+b+=c;
+}
+void tB()
+{
+c+=b;
+}
+int main()
+{
+std::thread t1(tA);
+std::thread t2(tB);
+std::cout << b+c << std::endl;
+t1.join();
+t2.join();
+return 0;
+}
+Résultat:
+s5.cpp
+La valeur finale dépend de 
+l’ordre d’exécution.
+
+SITUATION DE 
+COURSE
+Le processus qui termine en dernier détermine la valeur de var_globale.
+Les threads sont en concurrence pour l’accès à la ressource commune.
+L’exclusion mutuelle avec section critique permet d’éviter cette situation, nous 
+y reviendrons plus loin.
+8INF342 - SARA SÉGUIN 17
+
+VOCABULAIRE
+8INF342 - SARA SÉGUIN 18
+Situation de course: plusieurs threads ou processus utilisent la même donnée 
+partagée (en lecture/écriture) et l’ordre d’exécution détermine le résultat final.
+Exclusion mutuelle: Protège l’accès à une ressource partagée.
+Famine: Un processus qui n’est jamais sélectionné par le CPU afin d’être exécuté.
+Interblocage: Des processus qui se bloquent mutuellement de façon indéfinie.
+Avant de poursuivre….quelques définitions.
+
+8INF342 - SARA SÉGUIN 19
+INTERACTIONS ENTRE PROCESSUS
+
+INTERACTIONS ENTRE 
+PROCESSUS
+8INF342 - SARA SÉGUIN 20
+Trois types d’interactions sont possibles entre les processus:
+1. Compétition
+2. Coopération par partage (indirecte)
+3. Coopération par communication (directe)
+
+COMPÉTITION
+8INF342 - SARA SÉGUIN 21
+Les processus ne connaissent pas l’existence des autres processus.
+Même si ces processus sont indépendants, le SE doit tout de même les gérer. Deux 
+processus distincts pourraient vouloir accéder à la même imprimante (ressource), par 
+exemple.
+Problèmes possibles: exclusion mutuelle, interblocage, famine.
+
+COOPÉRATION PAR 
+PARTAGE 
+8INF342 - SARA SÉGUIN 22
+Les processus partagent des objets communs (par exemple la même 
+variable), mais n’ont pas à travailler ensemble. 
+Si deux processus accèdent à la même variable, on doit s’assurer de son 
+intégrité.
+Problèmes possibles: exclusion mutuelle, interblocage, famine.
+Coopération par communication
+Les processus connaissent l’existence des autres et doivent travailler ensemble.
+Problèmes possibles: interblocage et famine.
+
+PROBLÈMES CAUSÉS 
+PAR LES INTERACTIONS
+8INF342 - SARA SÉGUIN 23
+1. Interblocage (deadlock)
+Un ou plusieurs processus sont bloqués car ils s’attendent. 
+Processus A et B accèdent à x_1 et x_2.
+A utilise x_1 et attend x_2 et B utilise x_2 et attend x_1…
+2. Famine (starvation)
+Le processus n’est jamais choisit par le répartiteur. Par exemple, les 
+priorités peuvent causer ce problème.
+Autre exemple:
+T1,T2,T3 accèdent périodiquement à une ressource R. Supposons que T1 a accès
+à R et que T2 et T3 attendent pour R. Lorsque T1 quittera sa section critique, T2 ou T3 aura
+accès la la sienne. Supposons que T3 accède la ressource et qu’avant que T3 termine sa
+section critique, T1 demande l’accès et l’obtienne lorsque T3 libère la ressource. L’accès à la
+ressource pourra se faire indéfiniment entre T1 et T3, empêchant T2 d’accéder.
+
+8INF342 - SARA SÉGUIN 24
+EXCLUSION MUTUELLE
+
+EXCLUSION
+MUTUELLE
+Section critique: partie du code qui peut être exécutée par un seul thread à la fois.
+Ressource critique: Ressource non-partageable unique. (variable globale par 
+exemple)
+Afin d’assurer l’exclusion mutuelle, ces conditions doivent être respectées:
+1.Seulement un processus peut être dans la section critique à la fois.
+2.Un processus interrompu dans une section non-critique ne doit pas interférer 
+avec les autres.
+3.Un processus qui attend l’entrée à la section critique ne peut l’attendre 
+indéfiniment.
+8INF342 - SARA SÉGUIN 25
+Solution face à la compétition entre processus, en protégeant une section 
+critique.
+
+EXCLUSION
+MUTUELLE
+Afin d’assurer l’exclusion mutuelle, ces conditions doivent être respectées 
+(suite):
+4. Lorsqu’il n’y a aucun processus dans la section critique, alors tout processus 
+qui en fait la demande peut y accéder sans délais.
+5. Un processus demeure dans la section critique pour un temps fini.
+Un thread qui veut exécuter la section critique doit demander la permission par une 
+fonction système. Si un autre thread tente d’exécuter la section critique, il sera bloqué 
+tant que l’autre thread n’a pas quitté la section critique.
+L’exclusion mutuelle peut être réalisée par le matériel (hardware) ou le code 
+(software).
+8INF342 - SARA SÉGUIN 26
+
+EXCLUSION MUTUELLE 
+MATÉRIELLE
+Désactivation des interruptions
+Suffisant pour assurer l’exclusion mutuelle. Puisque la section critique ne peut être 
+interrompue, l’exclusion mutuelle est assurée. Cependant, cela risque de dégrader la 
+performance du système puisque le système d’exploitation est limité dans sa gestion des 
+processus à exécuter.
+De plus, cette approche ne fonctionne pas dans un système multi-processeur.
+while(true)
+{
+//Désactiver interruption
+//Section critique
+//Activer interruption
+//Reste du code
+}
+En pratique…c’est autre chose…pas la meilleure idée!
+8INF342 - SARA SÉGUIN 27
+
+EXCLUSION MUTUELLE 
+MATÉRIELLE
+Compare and swap
+Instruction matérielle disponible sur la plupart des processeurs.
+const int n = nb de processus
+int bolt;
+void P(int i)
+{
+ while(true){
+  while(compare_and_swap(bolt,0,1) == 1){}
+  //Section critique
+  bolt=0;
+  //Reste du code
+ }
+}
+void main()
+{
+ bolt = 0;
+ parbegin(P(1),P(2),…,P(n));
+}
+8INF342 - SARA SÉGUIN 28
+int compare_and_swap(int *word, int testval, int 
+newval)
+{
+int oldval;
+oldval = *word;
+if(oldval == testval) *word = newval ;
+return oldval;
+}
+
+EXCLUSION MUTUELLE 
+MATÉRIELLE
+Instruction exchange
+int const n = nb de processus;
+int bolt;
+void P(int i)
+{ while(true){
+ int keyi = 1;
+ do exchange(&keyi,&bolt)
+ while (keyi != 0);
+ //Section critique;
+ bolt = 0;
+ //Reste du code
+ }
+}
+void main()
+{
+ bolt = 0;
+ parbegin(P(1),P(2),…,P(n));
+}
+Échange le contenu d’un registre à la mémoire (ou de registre à registre, mais pas de la mémoire à la 
+mémoire)
+Instruction XCHG
+8INF342 - SARA SÉGUIN 29
+void exchange(int *register,int 
+*memory)
+{
+ int temp;
+ temp = *memory;
+ *memory = *register;
+ *register = temp;
+}
+
+EXCLUSION MUTUELLE 
+MATÉRIELLE
+Avantages:
+ Simple
+ Peut supporter plusieurs sections critiques (chaque section a sa variable)
+Désavantages:
+ Busy waiting
+ Famine possible
+ Deadlock possible
+8INF342 - SARA SÉGUIN 30
+
+EXCLUSION MUTUELLE 
+LOGICIELLE
+Des mécanismes existent dans les librairies de threads afin de garantir l’exclusion 
+mutuelle.
+Nous voyons le côté plus « théorique » de l’exclusion mutuelle et des sémaphores 
+d’abord, afin de vous montrer les algorithmes qui permettent de réaliser la 
+synchronisation.
+Juste avant, quelques mécanismes existants sont expliqués brièvement.
+8INF342 - SARA SÉGUIN 31
+
+MÉCANISMES DE 
+SYNCHRONISATION
+Spinlock: Attente active.
+Semaphore: Variable entière permettant seulement trois opérations: initialiser, 
+décrémenter et incrémenter.
+Binary semaphore: Sempahore qui prend seulement la valeur 0 ou 1.
+Mutex: Comme une sempahore, mais le processus qui bloque doit aussi 
+débloquer.
+Condition variable: Utilisé avec mutex, bloque le processus jusqu’à ce que la 
+condition soit validée.
+8INF342 - SARA SÉGUIN 32
+
+MÉCANISMES DE 
+SYNCHRONISATION
+Monitor: Encapsulation de l’exclusion mutuelle.
+Event flags: Un mot dont les bits permettent de bloquer les processus.
+Messages: Communication entre les processus.
+8INF342 - SARA SÉGUIN 33
+
+EXCLUSION
+MUTUELLE
+Un prermier algorithme, l’algorithme de Dekker, a été développé afin de garantir 
+l’exclusion mutuelle. Cependant, cet algorithme est relativement complexe à implémenter 
+(1968).
+Un second algorithme, l’algorithme de Peterson, a été publié en 1981, et garantit 
+l’exclusion mutuelle sur UN SEUL CPU. Ainsi, sur les ordinateurs modernes, l’algorithme 
+ne garantit pas l’exclusion.
+Pourquoi??
+Car les instructions réalisées par un CPU ne sont pas nécessairement vues par les 
+autres, donc les séquences d’instructions ne sont pas garanties si les CPU travaillent sur 
+les mêmes adresses….
+Mais, il est tout de même important de connaître cet algorithme!
+Si vous voulez en savoir plus sur Dekker, le web regorge d’explications.
+8INF342 - SARA SÉGUIN 34
+
+EXCLUSION
+MUTUELLE
+Solution simple
+int x = 0; //var globale
+int sCrit = 0; //var globale
+While(sCrit != 0)
+{
+//Attente
+}
+…//Code avant
+EnterCriticalSection(x);
+LeaveCriticalSection(x);
+sCrit = 1;
+…//Code après
+While(sCrit != 1)
+{
+//Attente
+}
+…//Code avant
+EnterCriticalSection(x);
+LeaveCriticalSection(x);
+sCrit = 0;
+…//Code après
+Processus A Processus B
+Est-ce que cela fonctionne?
+8INF342 - SARA SÉGUIN 35
+
+EXCLUSION
+MUTUELLE
+Oui, mais il y a deux problèmes:
+1.Alternance entre les sections critiques des processus. De plus, le processus le 
+plus lent determine la vitesse d’exécution.
+2.Si un des processus échoue dans sa section critique, l’autre est bloqué à 
+jamais.
+8INF342 - SARA SÉGUIN 36
+
+EXCLUSION
+MUTUELLE
+Solution 2.0
+int x; //var globale
+sCritA = true;
+While(sCritB)
+{
+//Ne rien faire
+}
+…//Code avant
+EnterCriticalSection(x);
+LeaveCriticalSection(x);
+sCritA = false;
+…//Code après
+sCritB = true;
+While(sCritA)
+{
+//Ne rien faire
+}
+…//Code avant
+EnterCriticalSection(x);
+LeaveCriticalSection(x);
+sCritB = false;
+…//Code après
+Processus A Processus B
+Est-ce que cela fonctionne?
+8INF342 - SARA SÉGUIN 37
+
+EXCLUSION MUTUELLE
+Oui, mais…
+Peut causer un deadlock, si les deux flags sCritA==true et sCritB==true avant 
+d’être entrés dans leur section critique.
+8INF342 - SARA SÉGUIN 38
+
+8INF342 - SARA SÉGUIN 39
+ALGORITHME DE PETERSON
+
+ALGORITHME DE 
+PETERSON
+//variables globales
+Bool sCritA;
+Bool sCritB;
+Int tour;
+While(true)
+{
+sCritA = true;
+tour = 1;
+while(sCritB == 1 && tour == 1)
+{
+//Ne rien faire
+}
+//CODE SECTION CRITIQUE
+sCritA = false;
+//Code après
+}
+Code du Thread A
+While(true)
+{
+sCritB = true;
+tour = 0;
+while(sCritA == 1 && tour == 0)
+{
+//Ne rien faire
+}
+//CODE SECTION CRITIQUE
+sCritB = false;
+//Code après
+}
+Code du Thread B
+Dans le main, il faut initialiser 
+sCritA = sCritB = false, puis 
+lancer les 2 threads.
+8INF342 - SARA SÉGUIN 40
+
+ALGORITHME DE 
+PETERSON
+#include<thread>
+int main void()
+{
+sCritA = 0;
+sCritB = 0;
+std::threadA(threadA);
+std::threadB(threadB);
+return 0;
+}
+main
+8INF342 - SARA SÉGUIN 41
+
+ALGORITHME DE 
+PETERSON
+8INF342 - SARA SÉGUIN 42
+• Deux processus qui alternent dans leur section critique.
+• La variable « tour » indique c’est à quel processus le tour d’entrer dans sa section 
+critique.
+• Les variables « sCritA » et « sCritB » indiquent quel processus est prêt à entrer dans sa 
+section critique.
+• Cet algorithme assure: exclusion mutuelle, attente finie pour entrée section critique.
+
+ALGORITHME DE 
+PETERSON
+Exclusion mutuelle
+• Processus A peut entrer dans sa section critique si sCritB = 0 ou tour = 0 
+(inverse pour B).
+• Si les deux processus exécutent leur section critique en même temps, 
+alors sCritA = sCritB = 1,mais tour peut être 0 ou 1, pas les deux. Respect 
+de l’exclusion mutuelle.
+8INF342 - SARA SÉGUIN 43
+
+ALGORITHME DE 
+PETERSON
+Attente finie
+• Si sCritB == 1 et tour == 1, processus A ne peut entrer dans sa section 
+critique. Seule boucle possible.
+• Si processus B n’est pas prêt à entrer dans sa section critique, alors 
+sCritB=0 et le processus A peut entrer.
+• Si processus B a sCritB = 1 et se trouve dans sa boucle, alors tour =0 ou 
+tour = 1. Si tour = 0, alors A peut entrer dans sa section critique. Si tour 
+=1, alors B entre dans sa section critique. 
+• Lorsque B sort de sa section critique, sCritB = 0, donc A peut entrer dans 
+la sienne. 
+• Si B pose sCritB = 1, alors tour =0. Puisque A ne change pas la valeur de 
+tour dans sa boucle, A va entrer dans sa section critique après une seule 
+entrée de B dans la sienne.
+8INF342 - SARA SÉGUIN 44
+
+ALGORITHME DE 
+PETERSON
+Permet d’assurer l’exclusion mutuelle.
+8INF342 - SARA SÉGUIN 45
+While(true)
+{
+sCritA = true;
+tour = 1;
+while(sCritB == 1 && tour == 1)
+{
+//Ne rien faire
+}
+//CODE SECTION CRITIQUE
+sCritA = false;
+//Code après
+}
+Code du Thread A
+While(true)
+{
+sCritB = true;
+tour = 0;
+while(sCritA == 1 && tour == 0)
+{
+//Ne rien faire
+}
+//CODE SECTION CRITIQUE
+sCritB = false;
+//Code après
+}
+Code du Thread B
+
+ALGORITHME DE 
+PETERSON
+8INF342 - SARA SÉGUIN 46
+While(true)
+{
+sCritA = true;
+tour = 1;
+while(sCritB == 1 && tour == 1)
+{
+//Ne rien faire
+}
+//CODE SECTION CRITIQUE
+sCritA = false;
+//Code après
+}
+Code du Thread A
+While(true)
+{
+sCritB = true;
+tour = 0;
+while(sCritA == 1 && tour == 0)
+{
+//Ne rien faire
+}
+//CODE SECTION CRITIQUE
+sCritB = false;
+//Code après
+}
+Code du Thread B
+
+ALGORITHME DE 
+PETERSON
+8INF342 - SARA SÉGUIN 47
+While(true)
+{
+sCritA = true;
+tour = 1;
+while(sCritB == 1 && tour == 1)
+{
+//Ne rien faire
+}
+//CODE SECTION CRITIQUE
+sCritA = false;
+//Code après
+}
+Code du Thread A
+While(true)
+{
+sCritB = true;
+tour = 0;
+while(sCritA == 1 && tour == 0)
+{
+//Ne rien faire
+}
+//CODE SECTION CRITIQUE
+sCritB = false;
+//Code après
+}
+Code du Thread B
+L’interblocage est aussi prévenu.
+
+ALGORITHME DE 
+PETERSON
+Validation:
+1. Est-ce que Processus B peut être bloqué dans sa section non-critique?
+• Impossible car il faudrait que sCritB == 0, et notre hypothèse est sCritB = 1;
+2. Est-ce que Processus B doit attendre pour la section critique?
+• Impossible car si tour ==1, B peut entrer dans sa section.
+3. Est-ce que Processus B peut monopoliser la section critique?
+• Impossible, car tour == 0   en quittant la section critique.
+8INF342 - SARA SÉGUIN 48
+
+ALGORITHME DE 
+PETERSON
+Note: Cette solution fait en sorte que les processus doivent 
+attendre avant de pouvoir entrer dans leur section critique. Cela 
+consomme du temps processeur et est connu sous le nom de 
+« busy waiting » ou « spin waiting ». Donc, le CPU est sollicité mais 
+ne fait « rien », pas optimal.
+De plus, tel que mentionné au début, ne fonctionne pas sur les OS 
+modernes.
+Une solution à ce problème est l’utilisation des sémaphores.
+8INF342 - SARA SÉGUIN 49
+
+8INF342 - SARA SÉGUIN 50
+EXEMPLES AVEC MUTEX
+
+MUTEX
+Mutex lock: Permet d’assurer l’exclusion mutuelle.
+Mutual exclusion: mutex
+Permet de protéger les sections critiques et d’éviter les situations de course.
+Un processus doit obtenir le cadenas avant d’entrer dans la section critique et le 
+retourner lorsqu’il quitte.
+Une fonction permet d’obtenir le cadenas et une autre de le libérer. 
+Une variable binaire indique si le cadenas est disponible.
+La librairie std::mutex implémente le tout: 
+(
+https://en.cppreference.com/w/cpp/thread/mutex)
+8INF342 - SARA SÉGUIN 51
+
+Initialiser disponible à 1.
+while(true){
+obtenirCadenas();
+//section critique
+libererCadenas();
+};
+libererCadenas(){
+disponible = 1;
+}
+MUTEX
+8INF342 - SARA SÉGUIN 52
+obtenirCadenas(){
+while(!disponible){
+//ne rien faire
+}
+disponible = 0;
+}
+Exemple
+Désavantage??
+Spinlock (busy waiting)
+
+MUTEX:EXEMPLE
+8INF342 - SARA SÉGUIN 53
+Ce code comporte 2 threads. Le premier 
+affiche le caractère * 50 fois et le second 
+le caractère – 50 fois.
+Qu’affiche le code? 
+À quoi sert th1.join() et th2.join()?
+Bloque le thread principal tant que les 
+threads n’ont pas complété leur 
+exécution. (plus d’info: 
+http://www.cplusplus.com/reference/thre
+ad/thread/join/
+)
+
+MUTEX:EXEMPLE
+8INF342 - SARA SÉGUIN 54
+Plusieurs possibilités car les threads ne sont pas synchronisés.
+L’affichage encerclé en rouge n’est probablement pas désiré. 
+Puisque les threads ne sont pas synchronisés, cela 
+demeurera toujours une possibilité d’affichage.
+
+MUTEX:EXEMPLE (2)
+8INF342 - SARA SÉGUIN 55
+Même code, avec mutex.
+Que se passe-t-il avec l’exécution?
+Pas tellement d’utilité dans ce cas-ci, 
+simplement un exemple pour illustrer.
+
+MUTEX:EXEMPLE (2)
+8INF342 - SARA SÉGUIN 56
+L’ordre des * et $ ne peut être 
+déterminée à l’avance, mais au 
+moins, les caractères ne peuvent 
+plus être entremêlés puisque la 
+section critique du code est 
+protégée par un mutex.
+
+EXEMPLE (3)
+Tiré de: https://www.quora.com/What-is-meant-by-race-condition
+ Solde de 1000$ dans votre compte bancaire.
+Votre mère vous transfère 500$ (A) et vous sortez 300$ (B) de votre compte.
+Que peuvent être les résultats possibles dans votre compte?
+8INF342 - SARA SÉGUIN 57
+
+EXEMPLE 
+(3)
+8INF342 - SARA SÉGUIN 58
+
+EXEMPLE (3)
+Tiré de: https://www.quora.com/What-is-meant-by-race-condition
+ Solde de 1000$ dans votre compte bancaire.
+Votre mère vous transfère 500$ (A) et vous sortez 300$ (B) de votre compte.
+Supposons que les 2 transactions (2 threads) sont complétées en même 
+temps: les 2 threads voient votre solde de 1000$.
+Suite à la transaction A, votre nouveau solde est 1500$
+Suite à la transaction B, votre nouveau solde est 700$
+Au final, il ne reste que 700$ dans votre compte alors que vous devriez avoir 
+1200$...
+Pourquoi cela se produit-il?
+8INF342 - SARA SÉGUIN 59
+
+EXEMPLE (3)
+8INF342 - SARA SÉGUIN 60
+Bien que cela n’arrive pas souvent, ce 
+n’est pas souhaitable de se retrouver 
+avec 700$ (1500$ est beaucoup mieux!).
+C’est une situation de course, il faut 
+synchroniser les threads.
+
+EXEMPLE
+8INF342 - SARA SÉGUIN 61
+Sans synchronisation
+
+EXEMPLE (3)
+8INF342 - SARA SÉGUIN 62
+Avec synchronisation
+Le solde sera toujours de 1200$, 
+peu importe l’ordre de traitement 
+des transactions. La variable 
+globale « solde » est protégée.
+
+8INF342 - SARA SÉGUIN 63
+SÉMAPHORES
+
+SÉMAPHORE
+Un sémaphore est une variable entière qui permet seulement trois opérations 
+atomiques.
+Opération atomique: Une opération qui s’exécute sans interruption. Un thread qui 
+exécute une opération atomique ne peut être interrompu tant que l’opération n’est 
+pas terminée. Voici une liste contenant les opérations atomiques en c++
+(
+https://en.cppreference.com/w/cpp/atomic#:~:text=The%20atomic%20library%20provides
+%20components,are%20free%20of%20data%20races.)
+Opérations possibles: initialiser, incrémenter, décrémenter.
+Oblige un processus à arrêter à un endroit précis à l’aide de signaux, qui sont 
+envoyés par les sémaphores.
+Permet d’isoler l’opération en cours des autres processus. 
+8INF342 - SARA SÉGUIN 64
+
+SÉMAPHORE
+Principe de fonctionnement
+Pour envoyer un signal via le sémaphore s: semSignal(s) (pour libérer la ressource)
+Pour recevoir un signal via le sémaphore s: semWait(s) (pour utiliser la ressource)
+Opérations sur le sémaphore
+Initialisation à une valeur non-négative, donc ≥ 0.
+semWait(s) décrémente la valeur du sémaphore. (c++20: acquire)
+semSignal(s) incrémente la valeur du compteur. (c++20: release)
+8INF342 - SARA SÉGUIN 65
+
+SÉMAPHORE
+Si la valeur du sémaphore est négative suite à semWait(s), alors le processus qui 
+l’exécute est bloqué.
+Si la valeur du sémaphore est <= 0 suite à semSignal(s), alors un processus bloqué 
+par semWait est débloqué.
+Sémaphore fort: si une file FIFO est utilisée, donc si le processus qui est bloqué 
+depuis le plus longtemps est débloqué, on parle de sémaphore fort.
+Sémaphore faible: Si un ordre de déblocage n’est pas spécifié alors c’est un 
+sémaphore faible.
+Sémaphore binaire: peut seulement prendre la valeur 0 ou 1.
+8INF342 - SARA SÉGUIN 66
+
+SÉMAPHORE –
+FONCTIONNEMENT
+Initialisation. La valeur à laquelle le sémaphore est initialisé est le nombre de 
+processus qui peuvent envoyer un signal semWait et qui peuvent poursuivre leur 
+exécution. Si initialisé à zéro, le prochain processus à envoyer un signal semWait
+est bloqué.
+Une valeur négative du sémaphore représente le nombre de processus en attente.
+semWait et semSignal sont des opérations atomiques.
+On ne peut savoir, à priori, si un processus sera bloqué suite à un signal semWait.
+À priori, on ne sait pas si un autre processus est en attente, donc le nombre de 
+processus débloqués, suite à un semSignal est soit 0, soit de 1.
+8INF342 - SARA SÉGUIN 67
+
+SÉMAPHORE –
+IMPLÉMENTATION
+Une file est utilisée pour les processus bloqués.
+Si stratégie de retrait de la file est FIFO: Sémaphore fort. Ce sémaphore empêche la famine.
+Si pas de stratégie de retrait: Sémaphore faible.
+Class semaphore{
+Public:
+sempahore(int n){} //constructeur
+atomic semWait(semaphore S){} 
+atomic semSignal(semaphore S){}
+Private:
+int _nbSem;
+std::queue<int> _fileBloque;
+};
+8INF342 - SARA SÉGUIN 68
+
+SÉMAPHORE –
+IMPLÉMENTATION
+Void semWait(semaphore s)
+{
+s._nbSem -- ; 
+if(s._nbSem >= 0) return;
+else{
+s._fileBloque.push(thread_courant);
+Bloquer le processus (fait par le OS)}
+}
+Void semSignal(semaphore s)
+{ s._nbSem++;
+if(s._nbSem > 0) return;
+else{
+t= s._fileBloque.pop();
+placer_file_pret(t)
+}
+}
+8INF342 - SARA SÉGUIN 69
+
+SÉMAPHORE -
+EXEMPLE
+8INF342 - SARA SÉGUIN 70
+ATTENTION
+Pour utiliser les sémaphores en C++, vous devez utiliser C++20.
+Si vous compilez sans spécifier la « version » de C++ cela pourrait ne pas 
+fonctionner.
+g++ -std=c++20 fichier.cpp –o executable
+
+COUNTING
+SEMAPHORE
+8INF342 - SARA SÉGUIN 71
+Binary semaphore (1 ou 0): exclusion mutuelle
+
+SÉMAPHORE -
+EXEMPLE
+2 threads
+Le thread 1 créé un vecteur de 4 valeurs.
+Le thread 2 modifie la valeur vecteur[2].
+8INF342 - SARA SÉGUIN 72
+
+SÉMAPHORE -
+EXEMPLE
+8INF342 - SARA SÉGUIN 73
+
+SÉMAPHORE -
+EXEMPLE
+8INF342 - SARA SÉGUIN 74
+Modifier le code pour synchroniser avec un 
+sémaphore. Indice: 4 lignes de code.
+
+SÉMAPHORE -
+EXEMPLE
+8INF342 - SARA SÉGUIN 75
+
+SÉMAPHORE –
+EXEMPLE2
+8INF342 - SARA SÉGUIN 76
+Exemple tiré de: https://www.geeksforgeeks.org/cpp-20-
+semaphore-header/
+
+SÉMAPHORE –
+EXEMPLE2
+8INF342 - SARA SÉGUIN 77
+
+SÉMAPHORE –
+EXEMPLE2
+8INF342 - SARA SÉGUIN 78
+counting_semaphore<10> semaphore(0); 
+Si nous initialisons la valeur à 0, que se passe-t-il, selon vous?
+Rien…pourquoi?
+
+8INF342 - SARA SÉGUIN 79
+EXCLUSION MUTUELLE 
+PAR SÉMAPHORE
+Supposons n processus qui partagent une ressource.
+Une section critique permet l’accès à la ressource.
+Semaphore s = 1; Il faut initialiser le sémaphore à 1!!
+const int n = //Nombre de processus
+semaphore s = 1;
+Voir P(int i)
+{
+while(true)
+{
+semWait(s);
+//Section critique
+semSignal(s);
+//Suite du code
+}
+}
+int main()
+{
+parbegin(P(1),P(2),…,P(n));
+}
+
+8INF342 - SARA SÉGUIN 80
+EXCLUSION MUTUELLE 
+PAR SÉMAPHORE
+ Le premier processus qui entre dans la section critique pourra y accéder.
+ Dès que d’autres processus tentent la section critique, les autres sont 
+bloqués (car s=-1).
+ Chaque processus qui tente d’entrer dans la section critique décrémente 
+le compteur.
+ Si nous voulons que plusieurs processus entrent dans la section critique 
+en même temps, comment fait-on??
+
+8INF342 - SARA SÉGUIN 81
+EXCLUSION MUTUELLE 
+PAR SÉMAPHORE
+Réponse: en initialisant le compteur à la valeur désirée.
+Rappel
+• s._nbSem ≥ 0 : nombre de processus qui peuvent exécuter 
+semWait(s) sans être bloqués (donc qui sont dans la section 
+critique).
+• s.nbSem < 0 : nombre de processus bloqués.
+
+8INF342 - SARA SÉGUIN 82
+
+8INF342 - SARA SÉGUIN 83
+PROBLÈMES CLASSIQUES DE 
+SYNCHRONISATION
+
+8INF342 - SARA SÉGUIN
+PROBLÈME DU 
+PRODUCTEUR/CONSOMMATEUR AVEC 
+SÉMAPHORE (TABLEAU INFINI)
+• Des usines de bière enregistrent leur production journalière (producteurs) et les 
+placent dans un tampon.
+• Le président de la compagnie (consommateur) lit ces données dans le tampon, 
+une entrée à la fois. 
+• Seulement une usine ou le président peuvent avoir accès au tampon.
+• Le problème à résoudre est le suivant: les usines ne doivent pas ajouter de 
+données si le tampon est plein (le président ne prend pas toujours le temps de 
+lire les données….) et le président ne doit pas tenter de lire un tampon vide (il 
+ne prend pas le temps de vérifier….).
+7560000
+Tampon des cannettes produites en 24h à l’usine X
+12342875 4567822 13267455 6448072 8976894
+0 1 2 3 4 5
+idx_ajoutidx_retrait
+
+8INF342 - SARA SÉGUIN 85
+EXERCICE
+
+8INF342 - SARA SÉGUIN 86
+PROBLÈME DU 
+PRODUCTEUR/CONSOMMATEUR 
+AVEC SÉMAPHORE (TABLEAU 
+INFINI)
+Le nombre d’items est un sémaphore et l’exclusion mutuelle est implémentée avec un 
+sémaphore. n = nombre d’items dans le tampon (idx_ajout-idx_retrait).
+Supposons un nombre d’items infini.
+Semaphore n = 0 , s = 1; //s=exclusion mutuelle
+int idx_ajout =0, idx_retrait=0;
+void producteur()
+{
+while(true){
+item = produireItem();
+semWait(s);
+ajouterItem(item);
+semSignal(s);
+semSignal(n);
+}
+}
+ajouterItem(item v){
+tab[idx_ajout]=v;
+idx_ajout++
+}
+
+void consommateur()
+{
+while(true){
+semWait(n);
+semWait(s);
+item = retirerItem();
+semSignal(s);
+consommeItem(item);
+}
+}
+Que se passe-t-il si semWait(n) et semWait(s) sont inversés? Faire la trace.
+Danger: le consommateur doit effectuer semWait(n) avant semWait(s), SINON 
+DEADLOCK!
+Si le producteur entre dans sa section critique et que n._valeur = 0, alors aucun 
+producteur ne pourra ajouter d’élément.
+8INF342 - SARA SÉGUIN 87
+PROBLÈME DU 
+PRODUCTEUR/CONSOMMATEUR AVEC 
+SÉMAPHORE (TABLEAU INFINI)
+retirerItem(){
+while(idx_ajout <= idx_retrait)
+{//Ne rien faire}
+item = tab[idx_retrait];
+idx_retrait++;
+return item;
+}
+void consommateur()
+{
+while(true){
+semWait(n);
+semWait(s);
+item = retirerItem();
+semSignal(s);
+consommeItem(item);
+}
+}
+
+8INF342 - SARA SÉGUIN 88
+PROBLÈME DU 
+PRODUCTEUR/CONSOMMATEUR AVEC 
+SÉMAPHORE (TABLEAU INFINI ) C++
+#include <thread>
+#include <semaphore>
+#include <queue>
+#include <iostream>
+#include <chrono>
+std::counting_semaphore<1> mtx{1};   // binary semaphore acts as mutex
+std::counting_semaphore<>  items{0}; // counts available items
+std::queue<int> q;
+void producer() {
+for (int i = 1; i <= 10; ++i) {
+std::this_thread::sleep_for(std::chrono::milliseconds(100)); // simulate work
+mtx.acquire();                      // lock
+q.push(i);
+mtx.release();                      // unlock
+items.release();                    // signal one new item
+std::cout << "[PROD] produced " << i << '\n';
+}
+}
+void consumer() {
+for (int i = 1; i <= 10; ++i) {
+items.acquire();                    // wait until at least one item exists
+int v;
+mtx.acquire();                      // lock
+v = q.front(); q.pop();
+mtx.release();                      // unlock
+std::cout << "          [CONS] consumed " << v << '\n';
+std::this_thread::sleep_for(std::chrono::milliseconds(150)); // simulate processing
+}
+}
+int main() {
+std::thread p(producer), c(consumer);
+p.join(); c.join();
+}
+Combien de sémaphores 
+sont utilisés, que font-ils?
+
+8INF342 - SARA SÉGUIN 89
+PROBLÈME DU 
+PRODUCTEUR/CONSOMMATEUR AVEC 
+SÉMAPHORE (TABLEAU FINI)
+Supposons maintenant un tableau de longueur finie, implémenté par un 
+tampon circulaire.
+Ajout d’un sémaphore qui contient le nombre d’espaces libres dans le 
+tableau.
+Semaphore n = 0 , s = 1, e=sizeTampon;
+int idx_ajout =0, idx_retrait=0,int sizeTampon=//taille;
+void producteur()
+{
+while(true){
+item = produireItem();
+semWait(e);
+semWait(s);
+ajouterItem(item);
+semSignal(s);
+semSignal(n);
+}
+}
+ajouterItem(item v){
+while((idx_ajout+1) mod sizeTampon==idx_retrait)
+{//Ne rien faire}
+tab[idx_ajout]=v;
+idx_ajout = (idx_ajout + 1) mod sizeTampon;
+}
+
+8INF342 - SARA SÉGUIN 90
+PROBLÈME DU 
+PRODUCTEUR/CONSOMMATEUR 
+AVEC SÉMAPHORE (TABLEAU FINI)
+void consommateur()
+{
+while(true){
+semWait(n);
+semWait(s);
+item = retirerItem();
+semSignal(s);
+semSignal(e);
+consommeItem(item);
+}
+}
+retirerItem(){
+while(idx_retrait==idx_ajout){}
+item = tab[idx_retrait];
+idx_retrait = (idx_retrait+1) mod sizeTampon;
+return item;
+}
+
+8INF342 - SARA SÉGUIN 91
+PROBLÈME DU 
+PRODUCTEUR/CONSOMMATEUR AVEC 
+SÉMAPHORE (TABLEAU FINI ) C++
+constexpr int N = 4;                 // buffer capacity
+constexpr int PRODUCE = 12;
+std::array<int, N> buf{};
+int inIdx = 0, outIdx = 0;
+std::counting_semaphore<1> mtx{1};           // binary semaphore for critical section
+std::counting_semaphore<>  emptySlots{N};    // free slots available
+std::counting_semaphore<>  fullSlots{0};     // items available
+void producer() {
+for (int item = 1; item <= PRODUCE; ++item) {
+std::this_thread::sleep_for(std::chrono::milliseconds(80));  // simulate work
+emptySlots.acquire();                // wait for space
+mtx.acquire();                       // enter critical section
+buf[inIdx] = item;
+inIdx = (inIdx + 1) % N;
+std::cout << "[PROD] produced " << item << '\n';
+mtx.release();                       // leave critical section
+fullSlots.release();                 // one more item present
+}
+}
+void consumer() {
+for (int i = 1; i <= PRODUCE; ++i) {
+fullSlots.acquire();                 // wait for an item
+int v;
+mtx.acquire();                       // enter critical section
+v = buf[outIdx];
+outIdx = (outIdx + 1) % N;
+std::cout << "          [CONS] consumed " << v << '\n';
+mtx.release();                       // leave critical section
+emptySlots.release();                // one more free slot
+std::this_thread::sleep_for(std::chrono::milliseconds(120)); // simulate processing
+}
+}
+int main() {
+std::thread p(producer), c(consumer);
+p.join(); c.join();
+}
+
+8INF342 - SARA SÉGUIN 92
+PROBLÈME DU 
+PRODUCTEUR/CONSOMMATEUR 
+AVEC SÉMAPHORE (TABLEAU FINI)
+Principe de fonctionnement
+On veut que le thread bloque si:
+• Le producteur tente d’insérer un objet dans un tableau plein
+• Le consommateur tente de retirer un objet dans un tableau vide
+On veut que le thread débloque si:
+• Le consommateur a ajouté un item
+• Le producteur a retiré un item
+
+PROBLÈME 
+READERS/ WRITERS
+8INF342 - SARA SÉGUIN 93
+Des données sont partagées par un nombre de processus. 
+Par exemple, un fichier, un bloc de mémoire, des registres, etc.
+Certains processus ne font que lire les données (readers) alors que 
+d’autres les modifient (writers). 
+Les conditions suivantes doivent êtres satisfaites:
+• Un seul writer peut écrire à la fois.
+• Un nombre illimité de readers peuvent consulter le fichier 
+simultanément.
+• Si un writer enregistre ses modifications, alors aucun reader ne peut lire 
+le fichier.
+
+PROBLÈME 
+READERS/ WRITERS
+8INF342 - SARA SÉGUIN 94
+Différences avec le producteur/consommateur
+Supposons un catalogue en ligne.
+Les consommateurs lisent le catalogue alors qu’un ou plusieurs producteurs 
+peuvent le modifier.
+Chaque lecture ou écriture serait une section critique….très long!!
+On ne veut pas que les consommateurs lisent le catalogue alors qu’il est en cours 
+de modifications.
+Si on modélise un producteur (writer) et un consommateur (reader)…le 
+producteur n’est pas juste un writer, il doit lire le catalogue pour savoir ou écrire 
+le prochain item et déterminer si le catalogue est plein.
+Le consommateur doit aussi mettre à jour le catalogue s’il achète un item!
+
+PROBLÈME 
+READERS/ WRITERS
+8INF342 - SARA SÉGUIN 95
+Solution 1: Les readers ont priorité
+Problème avec cette solution?
+Tant qu’il y a un reader, ils ont le 
+contrôle. Les writers risquent la 
+famine.
+
+PROBLÈME 
+READERS/ WRITERS
+8INF342 - SARA SÉGUIN 96
+Solution 2: Les writers ont priorité
+
+PROBLÈME DES 
+PHILOSOPHES
+8INF342 - SARA SÉGUIN 97
+ Cinq philosophes ne font que manger (des spaghettis) avec des baguettes et penser…
+ Chaque philosophe doit utiliser 2 baguettes pour manger (le spaghetti est très glissant!)
+ Il n’y a que 5 baguettes.
+ Les philosophes ne peuvent utiliser que la baguette à droite et celle à gauche.
+ Il faut un algorithme pour qu’ils ne meurent pas de faim!
+
+8INF342 - SARA SÉGUIN 98
+C++/LINUX
+
+8INF342 - SARA SÉGUIN 99
+C++ / LINUX
+POSIX pthread
+#include <pthread.h>
+Si compilation en ligne de commande: g++ *.cpp –o <NOM> -lpthread
+int pthread_mutex_lock(pthread_mutex_t *mutex);
+int pthread_mutex_unlock(pthread_mutex_t *mutex);
+Tiré de man pthread mutex
+pthread_mutex_lock locks the given mutex. If the mutex is currently unlocked, it 
+becomes locked and owned by the calling thread, and pthread_mutex_lock
+returns immedi- ately. If the mutex is already locked by another thread, 
+pthread_mutex_lock suspends the calling thread until the mutex is unlocked.
+pthread_mutex_unlock unlocks the given mutex. The mutex is assumed to be locked and 
+owned by the calling thread on entrance to pthread_mutex_unlock. If the mutex is of the 
+``fast'' kind, pthread_mutex_unlock always returns it to the unlocked state. If it is of the 
+``recursive'' kind, it decrements the locking count of the mutex (number of 
+pthread_mutex_lock operations performed on it by the call- ing thread), and only when this 
+count reaches zero is the mutex actually unlocked.
+
+8INF342 - SARA SÉGUIN 100
+C++ / LINUX
+#include<stdio.h> 
+#include<string.h> 
+#include<pthread.h> 
+#include<stdlib.h> 
+#include<unistd.h> 
+pthread_t thread
+[2];
+int compteur = 0;
+pthread_mutex_t lock;
+void* fct_thread(void *arg) { 
+pthread_mutex_lock(&lock); 
+compteur ++;
+pthread_mutex_unlock(&lock); 
+return NULL; 
+} 
+int main(void) { 
+int i = 0; 
+pthread_mutex_init(&lock);
+int err; 
+while(i < 2) { 
+err = pthread_create(&(thread[i]), NULL, &fct_thread, NULL); 
+if (err != 0) {
+printf("\ncan't create thread :[%s]", strerror(err)); i++; } 
+pthread_join(thread[0], NULL); 
+pthread_join(thread[1], NULL); 
+pthread_mutex_destroy(&lock); 
+return 0; 
+}
+pthread et mutex
+
+C++ / LINUX
+8INF342 - SARA SÉGUIN 101
+• Inclure <semaphore.h> dans l’en-tête (ainsi que pthread.h)
+• Les sémaphores sont de type sem_t.
+• Quelques fonctions:
+• sem_post(sem_t *): incrémentation
+• sem_wait(sem_t *): décrémentation
+• sem_getvalue(sem_t *, int*): accesseur
+• sem_destroy(sem_t *): sem_destroy
+
+C++ / LINUX
+8INF342 - SARA SÉGUIN 102
+#include<pthread.h> 
+#include<stdio.h> 
+#include<sempahore.h> 
+sem_t sempahore;
+void* fct_thread_1(void *arg) { 
+sem_post(&semaphore);
+} 
+voir* fct_thread_2(void *arg){
+sem_wait(&semaphore);
+}
+int main(void) { 
+pthread_t thread[2];
+sem_init(&semaphore,0,0);  //3e valeur: initialisation du compteur
+//Que se produit-il?
+pthread_create(&thread[0],0,fct_thread_1,(void*)1);
+pthread_create(&thread[1],0,fct_thread_2,(void*)2);
+pthread_join(thread[0],0);
+pthread_join(thread[1],0);
+sem_destroy(&semaphore);
+return 0; 
+} 
+semaphore et phtread
+
+C++ / LINUX
+8INF342 - SARA SÉGUIN 103
+std::thread
+#include <iostream>
+#include <thread>
+void fct_thread(int arg)
+{
+if(arg == 1)
+{
+std::cout << « Je suis le thread 1 << std::endl;
+}
+if(arg ==2)
+{
+std::cout <<« Je suis le thread 2 << std::endl;
+}
+}
+int main()
+{
+std::thread thread_1(fct_thread,1);
+std::thread thread_2(fct_thread,2);
+//Synchro
+thread_1.join();
+thread_2.join();
+return 0;
+}
+
+C++ / LINUX
+8INF342 - SARA SÉGUIN 104
+std::thread et std::mutex
+#include <iostream>
+#include <thread>
+#include <mutex>
+std::mutex monMutex;
+void fct_thread(int arg)
+{
+if(arg == 1)
+{
+monMutex.lock();
+std::cout << « Je suis le thread 1 << std::endl;
+monMutex.unlock();
+}
+if(arg ==2)
+{
+monMutex.lock();
+std::cout <<« Je suis le thread 2 << std::endl;
+monMutex.unlock();
+}
+}
+int main()
+{
+std::thread thread_1(fct_thread,1);
+std::thread thread_2(fct_thread,2);
+//Synchro
+thread_1.join();
+thread_2.join();
+return 0;
+}
+std::thread et mutex
+
+C++ / LINUX
+8INF342 - SARA SÉGUIN 105
+std::semaphore
+Depuis C++20, disponible!!! Ne pas oublier le flag de compilation.
+g++ moncode.cpp –o moncode.out –std=c++20
+
+CONDITION VARIABLE
+8INF342 - SARA SÉGUIN 106
+Attend tant qu’une condition est vraie. Doit être utilisé avec un mutex.
+ condition.wait(): bloque tant que la condition n’est pas validée
+ condition.notify(): réveille un thread bloqué par condition.wait()
+
+CONDITION VARIABLE
+8INF342 - SARA SÉGUIN 107
+Tiré de stack overflow
+
+8INF342 - SARA SÉGUIN 108
+AUTRES MÉCANISMES DE 
+SYNCHRONISATION
+(MATÉRIEL SUPPLÉMENTAIRE)
+
+UTILISATION DES 
+MESSAGES
+Lorsque les processus coopèrent ou interagissent, il est nécessaire de 
+synchroniser ces processus, mais ils doivent aussi communiquer.
+Les opérations minimales permettant d’utiliser les messages sont:
+ envoyer(destination, message)
+ recevoir(source, message)
+Cette méthode peut être utilisée pour des systèmes distribués, des systèmes 
+multi-processeurs ou un processeur.
+On parle d’IPC (interprocess communications).
+Les messages peuvent être bloquants ou non.
+Un message est une structure atomique.
+8INF342 - SARA SÉGUIN 109
+
+UTILISATION DES 
+MESSAGES
+Trois types d’implémentation
+Envoi et réception bloquants. Synchronisation précise des messages.
+Envoi non-bloquant, réception bloquant. Un thread peut envoyer un ou 
+plusieurs messages à plusieurs destinations simultanément. Le processus qui 
+attend le message est bloqué jusqu’à la réception du message. 
+Envoi et réception non-bloquant. Aucun processus n’est bloqué.
+8INF342 - SARA SÉGUIN 110
+
+UTILISATION DES 
+MESSAGES
+Envoi non-bloquant. Problèmes potentiels:
+ Erreur qui cause l’envoi de messages de façon répétitive, consommation 
+inutile de temps CPU.
+Réception bloquant. Problèmes potentiels:
+ Un message perdu peut causer le blocage d’un processus indéfiniment.
+ Peut régler ce problème en utilisant réception non-bloquant. Problème 
+potentiel:
+ Si un processus envoie un message après avoir reçu « réception » , perte 
+du message.
+8INF342 - SARA SÉGUIN 111
+
+ADRESSAGE DES 
+MESSAGES
+Adressage indirect. 
+Le message n’est pas adressé directement à un destinataire, mais plutôt 
+envoyé à une boîte aux lettres. Les processus qui doivent communiquer 
+passent par la même boîte.
+Adressage direct. 
+Le processus qui envoie le message identifie le destinataire, pas 
+toujours possible en pratique. 
+L’utilisation de messages indirects permet une plus grande flexibilité (schéma 
+tableau). 
+ One-to-one. Privé entre 2 processus.
+ Many-to-one. Client/serveur. La boîte aux lettres est un port.
+ One-to-many. Utile si un message doit être « broadcasté » à un ensemble de processus.
+ Many-to-many. Plusieurs processus serveurs à plusieurs clients.
+8INF342 - SARA SÉGUIN 112
+
+ADRESSAGE 
+DES MESSAGES
+Exemple de message one-to-one
+8INF342 - SARA SÉGUIN 113
+Boîte aux lettres
+Processus 
+envoi
+Processus 
+reçoit
+Habituellement, les messages sont placés dans des files FIFO. Si des messages 
+sont urgents, alors une priorité est assignée aux messages ou on permet au 
+processus qui reçoit de choisir le message à recevoir dans la file.
+
+ADRESSAGE DES 
+MESSAGES
+Exemple de structure de message
+8INF342 - SARA SÉGUIN 114
+Type de message
+Destination ID
+Source ID
+Longueur du message
+Information de contrôle
+Contenu du message
+En-tête
+Corps du message
+Selon le SE, la structure diffère. 
+Les messages peuvent être utilisés pour l’exclusion 
+mutuelle…
+
+EXCLUSION MUTUELLE 
+PAR MESSAGES
+const int n = nb de processus
+void P(int i)
+{
+message msg;
+while(true) {
+receive(box,msg);
+//SECTION CRITIQUE
+send(box,msg);
+//Reste du code…
+}
+}
+void main()
+{
+create mailbox(box);
+send(box,null);
+parbegin(P(1),P(2),…,P(n));
+}
+
+EXCLUSION MUTUELLE 
+PAR MESSAGES
+• Une boîte aux lettres avec un message vide est initialisée.
+• Le premier processus tente d’entrer dans sa section critique. Il doit 
+d’abord recevoir un message. Si la boîte est vide, le processus est 
+bloqué.
+• Lorsqu’un processus obtient un message, il entre dans sa section 
+critique puis replace le message dans la boîte en sortant.
+• Token entre les processus.
+Que se produit-il si plusieurs processus tentent de recevoir un message?
+1. Seul un processus obtient le message et les autres sont bloqués
+2. Si la boîte est vide, tous les processus sont bloqués, puis un 
+processus bloqué est débloqué et obtient le message.
+
+PRODUCTEUR/CONSOMMATEUR 
+PAR MESSAGES
+const int capacite = //capacité du tampon;
+const int null = //Message vide;
+int i;
+void producer()
+{
+message pmsg;
+while(true){
+receive(mayproduce,psmg);
+pmsg = produce();
+send(mayconsume,pmsg);
+}
+}
+void consumer()
+{
+message cmsg;
+while(true){
+receive(mayconsume,cmsg);
+consume(cmsg);
+send(mayproduce,null);
+}
+void main()
+{
+create_mailbox(mayproduce);
+create_mailbox(mayconsume);
+for(int i=1;i<=capacite;i++)
+{
+send(mayproduce,null);
+}
+parbegin(producer,consumer);
+}
+• Le producteur envoie des messages à la boîte 
+mayconsume.
+• Tant qu’il y a au moins un message dans cette boîte, alors 
+le consumer peut consommer.
+• Mayconsume est un buffer (queue de messages).
+• Initialement, mayproduce est remplie de messages vides 
+égal à capacité.
+• Le nombre de messages dans mayproduce diminue lors 
+produce et augmente lors de consumer
+
+SYNCHRONISATION 
+EN UNIX
+8INF342 - SARA SÉGUIN 118
+Plusieurs mécanismes permettent la synchronisation des processus dans 
+UNIX:
+• Signaux
+• Tuyaux (pipes)
+• Messages
+
+SIGNAUX
+8INF342 - SARA SÉGUIN 119
+Un signal permet d’informer un processus qu’un événement a eu lieu. 
+Tous les signaux sont traités également: pas de priorités.
+• Interruption de type logique envoyée à un processus
+• Envoyés par le système ou par un autre processus
+• Peuvent terminer un processus
+Un signal est envoyé en mettant à jour un champ dans le process table du 
+processus qui reçoit.
+Chaque signal est maintenu dans un bit, donc un seul signal de chaque 
+type à la fois.
+Les signaux sont mémorisés dans un mot (32 bits) du process control 
+block (PCB).
+
+SIGNAUX
+8INF342 - SARA SÉGUIN 120
+Valeur Nom Description
+01 SIGHUP Hangup, le kernel assume que 
+l’utilisateur du processus ne fait 
+rien d’utile…
+02 SIGINT Interruption
+04 SIGILL Instruction illégale
+10 SIGBUS Erreur de bus
+08 SIGFPE Exception point flotant
+09 SIGKILL Kill, terminer le processus
+14 SIGALARM Alarme, timer
+
+TUYAUX
+8INF342 - SARA SÉGUIN 121
+• Contribution majeure de UNIX.
+• File qui permet à 2 processus de communiquer.
+• Implémentés à l’aide d’un tampon circulaire.
+• Les tuyaux se manipulent comme des fichiers. La fonction lecture est bloquante.
+• L’exclusion mutuelle est instaurée: seul un des processus peut accéder au tuyau à un 
+moment.
+• Permet la communication dans un sens, si communication dans les deux sens, deux 
+tuyaux sont nécessaires.
+• Habituellement, un processus parent créé un tuyau pour communiquer avec son 
+enfant, créé par fork().
+
+TUYAUX
+8INF342 - SARA SÉGUIN 122
+Créer un tuyau: int pip[2];  //L’indice 0 est pour lire, indice 1 pour écrire
+Initialiser: pipe(pip);
+Fermer un côté: close(pip[0]) ou close(pip[1]);
+Écrire: write(pip[1], msg_a_ecrire, strlen(msg_a_ecrire));
+Lire: read(pip[0],msg_a_lire,sizeBuffer);
+
+TUYAUX
+8INF342 - SARA SÉGUIN 123
+Créer un tuyau: int pip[2];  //L’indice 0 est pour lire, indice 1 pour écrire
+Initialiser: pipe(pip);
+Fermer un côté: close(pip[0]) ou close(pip[1]);
+Écrire: write(pip[1], msg_a_ecrire, strlen(msg_a_ecrire));
+Lire: read(pip[0],msg_a_lire,sizeBuffer);
+tuyau
+parent
+enfant
+fd(0)
+pip(0
+)
+pip(0)
+pip(1)
+pip(1)
+
+8INF342 - SARA SÉGUIN 124
+#include <unistd.h>
+int main()
+{
+int pid, pip[2];
+char msg_a_lire[10];
+pipe(pip);
+pid =fork();
+if(pid ==0)
+{
+write(pip[1], »Mon message », 11);
+}
+else
+{
+read(pip[0],msg_a_lire,11);
+}
+}
+TUYAUX
+
+MESSSAGES
+8INF342 - SARA SÉGUIN 125
+• Permet de passer des messages, comme une boîte aux lettres.
+• Une queue est associée à chaque processus.
+• L’expéditeur spécifie le type de message.
+• Le receveur peut prendre les messages en FIFO ou par type de message.
+• Un processus est bloqué si la queue est pleine ou s’il tente de lire une queue vide.
+• Appels système msgsnd et msgrcv.

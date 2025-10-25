@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Assistant Pédagogique LEARN TECH</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    /* Layout 20% | 80% plein écran */
+    :root { --sidebar: 20vw; --gutter: 16px; font-family: system-ui, Arial; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f7f7f9; color: #222; }
+    .wrap { display: grid; grid-template-columns: var(--sidebar) 1fr; min-height: 100vh; }
+    aside { background:#0f172a; color:#fff; padding: 20px; position: sticky; top: 0; height: 100vh; overflow:auto; }
+    main  { padding: 20px; }
+
+    h1 { margin: 0 0 12px; font-size: 20px; color:#0f172a; }
+    .panel { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:16px; margin-bottom:16px; color: black; }
+    .row { display:flex; gap:8px; flex-wrap: wrap; }
+    button, .btn {
+      background:#2563eb; color:#fff; border:0; border-radius:10px; padding:10px 14px;
+      cursor:pointer; font-weight:600;
+    }
+    button.secondary { background:#10b981; }
+    button.warn { background:#7c3aed; }
+    button.gray { background:#6b7280; }
+    button:hover { filter: brightness(0.95); }
+    select, input[type=file] {
+      width:100%; padding:10px; border:1px solid #d1d5db; border-radius:10px; background:#fff;
+    }
+    .note { font-size: 12px; opacity:.85; }
+    .badge { display:inline-block; background:#e5e7eb; border-radius:8px; padding:2px 8px; font-size:12px; }
+
+    /* Résumé, QCM, Résultats */
+    .summary { min-height: 160px; white-space: pre-wrap; }
+    .qcm-item { border:1px solid #eee; border-radius:10px; padding:12px; margin-bottom:10px; background:#fafafa; }
+    .qcm-item h4 { margin:0 0 6px; }
+    .options label { display:block; margin:5px 0; }
+    .results .ok { color:#15803d; font-weight:600; }
+    .results .ko { color:#b91c1c; font-weight:600; }
+    .footer { margin-top: 24px; font-size: 12px; color:#475569; }
+    audio { width:100%; margin-top:8px; }
+
+    /* Bas de page: uploader en pleine largeur */
+    .uploader { position: sticky; bottom: 0; background: #0f172a; color:#fff; padding: 12px; border-radius: 12px; }
+    .uploader input[type=file] { background: #fff; }
+
+    @media (max-width: 980px) {
+      :root { --sidebar: 28vw; }
+    }
+    @media (max-width: 720px) {
+      :root { --sidebar: 100vw; }
+      .wrap { grid-template-columns: 1fr; }
+      aside { height:auto; position: static; }
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Barre latérale (20%) -->
+  <aside>
+    <h2 style="margin-top:0">parametres</h2>
+    <form method="post" enctype="multipart/form-data" class="panel">
+      <label for="niveau"><b>Niveau de raisonnement</b></label>
+      <select name="niveau" id="niveau" onchange="this.form.submit()">
+        <option value="debutant"     {{ 'selected' if niveau=='debutant' else '' }}>Débutant</option>
+        <option value="intermediaire"{{ 'selected' if niveau=='intermediaire' else '' }}>Intermédiaire</option>
+        <option value="avance"       {{ 'selected' if niveau=='avance' else '' }}>Avancé</option>
+      </select>
+      <input type="hidden" name="action" value="set_niveau">
+      <p class="note">Par défaut: <b>Débutant</b> si rien n'est sélectionné.</p>
+    </form>
+
+    <form method="post" enctype="multipart/form-data" class="panel">
+      <label for="dommaie"><b>Domaine Etude</b></label>
+      <select name="domaine" id="domaine" onchange="this.form.submit()">
+        <option value="Informatique"         {{ 'selected' if domaine=='Informatique' else '' }}>Informatique</option>
+        <option value="Sante"                {{ 'selected' if domaine=='Sante' else '' }}>Sante</option>
+        <option value="Administration"       {{ 'selected' if domaine=='Administration' else '' }}>Administration</option>
+        <option value="Administration"       {{ 'selected' if domaine=='Marketing' else '' }}>Marketing</option>
+      </select>
+      <input type="hidden" name="action" value="set_domaine">
+      <p class="note">Par défaut: <b>Informatique</b> si rien n'est sélectionné.</p>
+    </form>
+
+
+
+
+    <div class="panel">
+      <p><b>Statut</b></p>
+      <p>Fichier: {{ filename if filename else 'aucun' }}</p>
+      <p>Niveau: <span class="badge">{{ niveau }}</span></p>
+      <p>Niveau: <span class="badge">{{ domaine }}</span></p>
+    </div>
+
+    <!-- Uploader collé en bas de la barre -->
+    <form method="post" enctype="multipart/form-data" class="uploader">
+      <input type="file" name="file" accept=".pdf,.docx,.pptx" required>
+      <input type="hidden" name="action" value="upload">
+      <div class="row" style="margin-top:8px;">
+        <button type="submit">Soumissiom</button>
+      </div>
+      <p class="note">PDF, DOCX ou PPTX (≤20 MB)</p>
+    </form>
+  </aside>
+
+
+
+  
+
+  <!-- Zone principale (80%) -->
+  <main>
+    <h1>Assistant Pédagogique LEARN TECH</h1>
+
+    {% if request.args.get('msg') %}
+      <div class="panel" style="border-color:#c7d2fe;background:#eef2ff">{{ request.args.get('msg') }}</div>
+    {% endif %}
+
+    <div class="panel">
+      <div class="row">
+        <!-- Actions -->
+        <form method="post">
+          <input type="hidden" name="action" value="resume">
+          <button type="submit" title="Générer un résumé du document">résumé</button>
+        </form>
+
+        <form method="post">
+          <input type="hidden" name="action" value="audio">
+          <button type="submit" class="secondary" title="Synthèse vocale du contenu">lecture audio</button>
+        </form>
+
+        <form method="post">
+          <input type="hidden" name="action" value="qcm">
+          <button type="submit" class="warn" title="Générer un QCM de 10 questions">QCM (10)</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Résumé -->
+    <div class="panel">
+      <h3>Résumé</h3>
+      <div class="summary">{{ summary if summary else '— Génère un résumé pour l’afficher ici —' }}</div>
+    </div>
+
+    <!-- Audio -->
+    <div class="panel">
+      <h3>Lecture audio</h3>
+      {% if audio_url %}
+        <audio id="audio" controls src="{{ audio_url }}"></audio>
+        <div class="row" style="margin-top:8px;">
+          <button class="gray" onclick="playAudio()">Play</button>
+          <button class="gray" onclick="pauseAudio()">Pause</button>
+          <button class="gray" onclick="stopAudio()">Stop</button>
+        </div>
+      {% else %}
+        <p class="note">Clique sur <b>lecture audio</b> pour générer un MP3.</p>
+      {% endif %}
+    </div>
+
+    <!-- QCM -->
+    <div class="panel">
+      <h3>QCM (10) – Niveau: <span class="badge">{{ niveau }}</span></h3>
+      {% if qcm and qcm|length >= 1 %}
+        <form method="post">
+              {% for q in qcm %}
+                <div class="qcm-item">
+                  <h4>{{ loop.index }}) {{ q.question }}</h4>
+                  <div class="options">
+                      {% for key, val in q.options.items() %}
+                        <label>
+                          <input type="radio" name="q_{{ loop.index0 }}" value="{{ key }}"> ({{ key }}) {{ val }}
+                        </label>
+                      {% endfor %}
+                  </div>
+                </div>
+              {% endfor %}
+            <input type="hidden" name="action" value="submit_qcm">
+            <button type="submit">Soumettre</button>
+        </form>
+      {% else %}
+        <p class="note">Clique sur <b>QCM (10)</b> pour générer les questions.</p>
+      {% endif %}
+    </div>
+
+    <!-- Résultats -->
+    <div class="panel">
+      <h3>Résultats</h3>
+      {% if results and results|length > 0 %}
+        <p><b>Score :</b> {{ score_line }}</p>
+        <div class="results">
+          {% for r in results %}
+            <div class="qcm-item">
+              <div>
+                <span><b>Question {{ r.n }}</b></span>
+                {% if r.ok %}<span class="ok"> — Bonne réponse ✔</span>
+                {% else %}<span class="ko"> — Mauvaise réponse ✘</span>{% endif %}
+              </div>
+              <div class="note">Votre choix: {{ r.user }} · Réponse: {{ r.correct }}</div>
+              {% if r.explain %}
+                <div style="margin-top:6px;"><i>Justification:</i> {{ r.explain }}</div>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="note">Soumets un QCM pour voir les résultats et les explications ici.</p>
+      {% endif %}
+    </div>
+
+    <div class="footer">
+      <b>Tous droits réservés : </b> Ilboudo Rodrigue & Adama Diop.
+    </div>
+  </main>
+</div>
+
+<script>
+  // JS minimal pour l'audio (piloté côté client uniquement)
+  function playAudio(){ const a=document.getElementById('audio'); if(a){ a.play(); } }
+  function pauseAudio(){ const a=document.getElementById('audio'); if(a){ a.pause(); } }
+  function stopAudio(){ const a=document.getElementById('audio'); if(a){ a.pause(); a.currentTime=0; } }
+</script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+flask
+openai
+
+python-dotenv==1.0.1
+
+pyttsx3
+
+PyPDF2>=3.0.1
+python-docx>=1.1.0
+python-pptx>=0.6.23
+lxml>=5.1.0
+Pillow>=10.3.0
